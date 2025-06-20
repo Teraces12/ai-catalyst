@@ -47,7 +47,7 @@ async def summarize_pdf(file: UploadFile = File(...)):
         chain = load_qa_chain(llm, chain_type="stuff")
         response = chain.run(input_documents=docs, question="Summarize this in 5 sentences")
 
-        return {"summary": response}
+        return {"summary": str(response)}
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -79,7 +79,7 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
         chain = load_qa_chain(llm, chain_type="stuff")
         response = chain.run(input_documents=relevant_docs, question=question)
 
-        return {"answer": response}
+        return {"answer": str(response)}
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
