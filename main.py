@@ -20,7 +20,7 @@ os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 app = FastAPI(
     title="AI Catalyst API",
     description="🧠 Cognitive PDF Assistant using LangChain + OpenAI",
-    version="2.0.0"
+    version="2.1.0"
 )
 
 app.add_middleware(
@@ -42,7 +42,9 @@ async def summarize_pdf(
     file: UploadFile = File(...),
     model_name: str = Form("gpt-3.5-turbo-16k"),
     temperature: float = Form(0.0),
-    allow_non_english: bool = Form(False)
+    allow_non_english: bool = Form(False),
+    start_page: int = Form(1),
+    end_page: int = Form(10000)  # large default max page
 ):
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -50,10 +52,11 @@ async def summarize_pdf(
             tmp_path = tmp.name
 
         loader = PyMuPDFLoader(tmp_path)
-        pages = loader.load()
+        all_pages = loader.load()
+        pages = all_pages[start_page - 1:end_page]  # select page range
 
-        sample_text = pages[0].page_content[:300]
-        lang = detect(sample_text)
+        sample_text = pages[0].page_content[:300] if pages else ""
+        lang = detect(sample_text) if sample_text else "unknown"
 
         if lang != "en" and not allow_non_english:
             return JSONResponse(status_code=400, content={"error": f"Detected non-English text: {lang}"})
@@ -65,7 +68,9 @@ async def summarize_pdf(
         chain = load_summarize_chain(llm, chain_type="map_reduce")
         summary = chain.run(docs)
 
-        return {"answer": summary, "language": lang}
+        citations = [d.metadata.get("source", "page") for d in docs[:3]]
+
+        return {"answer": summary, "language": lang, "citations": citations}
 
     except Exception as e:
         traceback.print_exc()
@@ -77,7 +82,9 @@ async def ask_question(
     question: str = Form(...),
     model_name: str = Form("gpt-3.5-turbo-16k"),
     temperature: float = Form(0.0),
-    allow_non_english: bool = Form(False)
+    allow_non_english: bool = Form(False),
+    start_page: int = Form(1),
+    end_page: int = Form(10000)
 ):
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -85,10 +92,11 @@ async def ask_question(
             tmp_path = tmp.name
 
         loader = PyMuPDFLoader(tmp_path)
-        pages = loader.load()
+        all_pages = loader.load()
+        pages = all_pages[start_page - 1:end_page]
 
-        sample_text = pages[0].page_content[:300]
-        lang = detect(sample_text)
+        sample_text = pages[0].page_content[:300] if pages else ""
+        lang = detect(sample_text) if sample_text else "unknown"
 
         if lang != "en" and not allow_non_english:
             return JSONResponse(status_code=400, content={"error": f"Detected non-English text: {lang}"})
@@ -105,7 +113,9 @@ async def ask_question(
         chain = load_qa_chain(llm, chain_type="stuff")
         answer = chain.run(input_documents=relevant_docs, question=question)
 
-        return {"answer": answer, "language": lang}
+        citations = [doc.metadata.get("source", "page") for doc in relevant_docs[:3]]
+
+        return {"answer": answer, "language": lang, "citations": citations}
 
     except Exception as e:
         traceback.print_exc()
