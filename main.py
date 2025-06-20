@@ -32,8 +32,25 @@ def read_root():
 
 @app.post("/summarize")
 async def summarize_pdf(file: UploadFile = File(...)):
-    # Dummy response — replace with real LangChain logic
-    return {"summary": f"This is a summary of {file.filename}."}
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+
+        loader = PyMuPDFLoader(tmp_path)
+        pages = loader.load()
+
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        docs = text_splitter.split_documents(pages)
+
+        llm = OpenAI(temperature=0)
+        chain = load_qa_chain(llm, chain_type="stuff")
+        response = chain.run(input_documents=docs, question="Summarize this in 5 sentences")
+
+        return {"summary": response}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/ask")
 async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
