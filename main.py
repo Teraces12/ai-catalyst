@@ -15,12 +15,13 @@ import tempfile
 import traceback
 import os
 
+# Load environment variables securely
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI(
     title="AI Catalyst API",
     description="🧠 Cognitive PDF Assistant using LangChain + OpenAI",
-    version="2.1.0"
+    version="2.2.0 - Ultra Modern UI"
 )
 
 app.add_middleware(
@@ -32,7 +33,13 @@ app.add_middleware(
 
 @app.get("/", tags=["Health Check"])
 def read_root():
-    return JSONResponse(content={"status": "✅ API is running", "message": "Welcome to AI Catalyst - your smart PDF assistant!"})
+    return JSONResponse(content={
+        "status": "✅ API is running",
+        "message": "Welcome to AI Catalyst - your ultra-modern PDF assistant!",
+        "logo_url": "/static/logo.png",
+        "ui_theme": "ultra-modern",
+        "animations": True
+    })
 
 def get_llm(model_name="gpt-3.5-turbo-16k", temperature=0):
     return ChatOpenAI(model_name=model_name, temperature=temperature)
@@ -44,7 +51,7 @@ async def summarize_pdf(
     temperature: float = Form(0.0),
     allow_non_english: bool = Form(False),
     start_page: int = Form(1),
-    end_page: int = Form(10000)  # large default max page
+    end_page: int = Form(10000)
 ):
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -53,7 +60,7 @@ async def summarize_pdf(
 
         loader = PyMuPDFLoader(tmp_path)
         all_pages = loader.load()
-        pages = all_pages[start_page - 1:end_page]  # select page range
+        pages = all_pages[start_page - 1:end_page]
 
         sample_text = pages[0].page_content[:300] if pages else ""
         lang = detect(sample_text) if sample_text else "unknown"
@@ -70,7 +77,13 @@ async def summarize_pdf(
 
         citations = [d.metadata.get("source", "page") for d in docs[:3]]
 
-        return {"answer": summary, "language": lang, "citations": citations}
+        return {
+            "answer": summary,
+            "language": lang,
+            "citations": citations,
+            "animated": True,
+            "theme": "ultra-modern"
+        }
 
     except Exception as e:
         traceback.print_exc()
@@ -115,7 +128,13 @@ async def ask_question(
 
         citations = [doc.metadata.get("source", "page") for doc in relevant_docs[:3]]
 
-        return {"answer": answer, "language": lang, "citations": citations}
+        return {
+            "answer": answer,
+            "language": lang,
+            "citations": citations,
+            "animated": True,
+            "theme": "ultra-modern"
+        }
 
     except Exception as e:
         traceback.print_exc()
