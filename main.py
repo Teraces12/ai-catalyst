@@ -17,7 +17,10 @@ app.add_middleware(
 
 @app.get("/", tags=["Health Check"])
 def read_root():
-    return JSONResponse(content={"status": "✅ API is running", "message": "Welcome to AI Catalyst - your smart PDF assistant!"})
+    return JSONResponse(content={
+        "status": "✅ API is running",
+        "message": "Welcome to AI Catalyst - your smart PDF assistant!"
+    })
 
 @app.post("/summarize")
 async def summarize_pdf(file: UploadFile = File(...)):
