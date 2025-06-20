@@ -21,7 +21,7 @@ os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 app = FastAPI(
     title="AI Catalyst API",
     description="🧠 Cognitive PDF Assistant using LangChain + OpenAI",
-    version="2.2.0 - Ultra Modern UI"
+    version="2.3.0 - Ultra Modern Adobe-Red Theme"
 )
 
 app.add_middleware(
@@ -36,8 +36,15 @@ def read_root():
     return JSONResponse(content={
         "status": "✅ API is running",
         "message": "Welcome to AI Catalyst - your ultra-modern PDF assistant!",
-        "logo_url": "/static/logo.png",
-        "ui_theme": "ultra-modern",
+        "branding": {
+            "logo_url": "/static/logo.png",
+            "background_color": "#FF0000",  # Adobe Red
+            "footer": {
+                "website": "https://ai-catalyst.io",
+                "contact_email": "hello@ai-catalyst.io",
+                "address": "Silicon Valley, CA, USA"
+            }
+        },
         "animations": True
     })
 
@@ -81,8 +88,8 @@ async def summarize_pdf(
             "answer": summary,
             "language": lang,
             "citations": citations,
-            "animated": True,
-            "theme": "ultra-modern"
+            "theme": "adobe-red",
+            "footer": True
         }
 
     except Exception as e:
@@ -132,8 +139,8 @@ async def ask_question(
             "answer": answer,
             "language": lang,
             "citations": citations,
-            "animated": True,
-            "theme": "ultra-modern"
+            "theme": "adobe-red",
+            "footer": True
         }
 
     except Exception as e:
