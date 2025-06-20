@@ -2,12 +2,12 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from langchain.document_loaders import PyMuPDFLoader
+from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
-from langchain.llms import OpenAI
+from langchain_community.llms import OpenAI
 import tempfile
 
 app = FastAPI(
@@ -32,8 +32,13 @@ def read_root():
 
 @app.post("/summarize")
 async def summarize_pdf(file: UploadFile = File(...)):
+    # Dummy response — replace with real LangChain logic
+    return {"summary": f"This is a summary of {file.filename}."}
+
+@app.post("/ask")
+async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
     try:
-        # Save uploaded PDF
+        # Save file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(await file.read())
             tmp_path = tmp.name
@@ -45,12 +50,19 @@ async def summarize_pdf(file: UploadFile = File(...)):
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         docs = text_splitter.split_documents(pages)
 
-        # Generate summary using LangChain LLM chain
+        # Embed and index with FAISS
+        embeddings = OpenAIEmbeddings()
+        vectorstore = FAISS.from_documents(docs, embeddings)
+
+        # Search + Answer
+        retriever = vectorstore.as_retriever()
+        relevant_docs = retriever.get_relevant_documents(question)
+
         llm = OpenAI(temperature=0)
         chain = load_qa_chain(llm, chain_type="stuff")
-        summary = chain.run(input_documents=docs, question="Summarize this document in 5 sentences.")
+        response = chain.run(input_documents=relevant_docs, question=question)
 
-        return {"summary": summary}
+        return {"answer": response}
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
