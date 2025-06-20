@@ -11,3 +11,15 @@ langchain-community
 langchain-openai
 python-multipart
 langdetect
+pytesseract
+pdf2image
+Pillow
+deep-translator
+spacy
+keybert
+pdfplumber
+camelot-py
+faiss-cpu
+chromadb
+celery
+redis
