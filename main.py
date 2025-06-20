@@ -7,6 +7,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
+from langchain.chains.summarize import load_summarize_chain
 from langchain_community.llms import OpenAI
 
 from langdetect import detect
@@ -21,7 +22,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict for production
+    allow_origins=["*"],  # Lock down for production
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -34,8 +35,6 @@ def read_root():
     })
 
 
-from langchain.chains.summarize import load_summarize_chain
-
 @app.post("/summarize")
 async def summarize_pdf(file: UploadFile = File(...)):
     try:
@@ -46,24 +45,28 @@ async def summarize_pdf(file: UploadFile = File(...)):
         loader = PyMuPDFLoader(tmp_path)
         pages = loader.load()
 
+        if not pages:
+            return JSONResponse(status_code=400, content={"error": "No readable text found in PDF."})
+
+        sample_text = pages[0].page_content[:200]
+        lang = detect(sample_text)
+        if lang != "en":
+            return JSONResponse(status_code=400, content={"error": f"Non-English PDF detected (language: {lang})"})
+
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         docs = text_splitter.split_documents(pages)
-
         if not docs:
-            return JSONResponse(status_code=400, content={"error": "PDF contains no readable text."})
+            return JSONResponse(status_code=400, content={"error": "PDF contains no usable text."})
 
         llm = OpenAI(temperature=0, model_name="gpt-3.5-turbo-16k")
-
-        # ✅ Use Map-Reduce to summarize large doc intelligently
         chain = load_summarize_chain(llm, chain_type="map_reduce")
-        summary = chain.run(docs)
 
+        summary = chain.run(docs)
         return {"answer": summary}
 
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": str(e)})
-
 
 
 @app.post("/ask")
@@ -81,15 +84,13 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
 
         sample_text = pages[0].page_content[:200]
         lang = detect(sample_text)
-
         if lang != "en":
-            return JSONResponse(
-                status_code=400,
-                content={"error": f"Non-English PDF detected (language: {lang}). Please upload English documents only."}
-            )
+            return JSONResponse(status_code=400, content={"error": f"Non-English PDF detected (language: {lang})"})
 
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         docs = text_splitter.split_documents(pages)
+        if not docs:
+            return JSONResponse(status_code=400, content={"error": "No usable content found in PDF."})
 
         embeddings = OpenAIEmbeddings()
         vectorstore = FAISS.from_documents(docs, embeddings)
