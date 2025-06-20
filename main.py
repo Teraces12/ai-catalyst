@@ -20,7 +20,7 @@ os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI(
     title="AI Catalyst API",
-    description="🧠 Cognitive PDF Assistant using LangChain + OpenAI",
+    description="🧠 Cognitive PDF Assistant using LangChain + OpenAI\n\n📍 TerasystemsAI - Philadelphia, PA, USA - Serving Globally\n🌐 www.terasystems.ai\n✉️ hello@terasystems.ai",
     version="2.3.0 - Ultra Modern Adobe-Red Theme"
 )
 
@@ -42,7 +42,7 @@ def read_root():
             "footer": {
                 "website": "https://ai-catalyst.io",
                 "contact_email": "hello@ai-catalyst.io",
-                "address": "Silicon Valley, CA, USA"
+                "address": "TerasystemsAI, Philadelphia, PA, USA - Serving Globally"
             }
         },
         "animations": True
