@@ -32,13 +32,8 @@ def read_root():
 
 @app.post("/summarize")
 async def summarize_pdf(file: UploadFile = File(...)):
-    # Dummy response — replace with real LangChain logic
-    return {"summary": f"This is a summary of {file.filename}."}
-
-@app.post("/ask")
-async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
     try:
-        # Save file temporarily
+        # Save uploaded PDF
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(await file.read())
             tmp_path = tmp.name
@@ -50,19 +45,12 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         docs = text_splitter.split_documents(pages)
 
-        # Embed and index with FAISS
-        embeddings = OpenAIEmbeddings()
-        vectorstore = FAISS.from_documents(docs, embeddings)
-
-        # Search + Answer
-        retriever = vectorstore.as_retriever()
-        relevant_docs = retriever.get_relevant_documents(question)
-
+        # Generate summary using LangChain LLM chain
         llm = OpenAI(temperature=0)
         chain = load_qa_chain(llm, chain_type="stuff")
-        response = chain.run(input_documents=relevant_docs, question=question)
+        summary = chain.run(input_documents=docs, question="Summarize this document in 5 sentences.")
 
-        return {"answer": response}
+        return {"summary": summary}
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
