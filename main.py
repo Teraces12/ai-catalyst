@@ -7,7 +7,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
-from langchain_community.llms import OpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain.chains.summarize import load_summarize_chain
 from langdetect import detect
 
@@ -35,7 +35,7 @@ def read_root():
     return JSONResponse(content={"status": "✅ API is running", "message": "Welcome to AI Catalyst - your smart PDF assistant!"})
 
 def get_llm(model_name="gpt-3.5-turbo-16k", temperature=0):
-    return OpenAI(model_name=model_name, temperature=temperature)
+    return ChatOpenAI(model_name=model_name, temperature=temperature)
 
 @app.post("/summarize")
 async def summarize_pdf(
@@ -63,7 +63,7 @@ async def summarize_pdf(
 
         llm = get_llm(model_name=model_name, temperature=temperature)
         chain = load_summarize_chain(llm, chain_type="map_reduce")
-        summary = chain.run(docs)  # Handles chunked input correctly
+        summary = chain.run(docs)
 
         return {"answer": summary, "language": lang}
 
