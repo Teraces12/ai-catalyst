@@ -34,6 +34,8 @@ def read_root():
     })
 
 
+from langchain.chains.summarize import load_summarize_chain
+
 @app.post("/summarize")
 async def summarize_pdf(file: UploadFile = File(...)):
     try:
@@ -44,33 +46,24 @@ async def summarize_pdf(file: UploadFile = File(...)):
         loader = PyMuPDFLoader(tmp_path)
         pages = loader.load()
 
-        if not pages:
-            return JSONResponse(status_code=400, content={"error": "No readable text found in PDF."})
-
-        sample_text = pages[0].page_content[:200]
-        lang = detect(sample_text)
-
-        if lang != "en":
-            return JSONResponse(
-                status_code=400,
-                content={"error": f"Non-English PDF detected (language: {lang}). Please upload English documents only."}
-            )
-
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         docs = text_splitter.split_documents(pages)
 
         if not docs:
-            return JSONResponse(status_code=400, content={"error": "Text could not be split properly."})
+            return JSONResponse(status_code=400, content={"error": "PDF contains no readable text."})
 
-        llm = OpenAI(temperature=0)
-        chain = load_qa_chain(llm, chain_type="stuff")
-        response = chain.run(input_documents=docs, question="Summarize this in 5 sentences")
+        llm = OpenAI(temperature=0, model_name="gpt-3.5-turbo-16k")
 
-        return {"answer": str(response)}
+        # ✅ Use Map-Reduce to summarize large doc intelligently
+        chain = load_summarize_chain(llm, chain_type="map_reduce")
+        summary = chain.run(docs)
+
+        return {"answer": summary}
 
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 
 @app.post("/ask")
