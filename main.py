@@ -9,6 +9,7 @@ from langchain_community.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
 from langchain_community.llms import OpenAI
 import tempfile
+import logging
 
 app = FastAPI(
     title="AI Catalyst API",
@@ -18,10 +19,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Make more strict for production
+    allow_origins=["*"],  # Adjust for production
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logging.basicConfig(level=logging.INFO)
 
 @app.get("/", tags=["Health Check"])
 def read_root():
@@ -45,11 +48,12 @@ async def summarize_pdf(file: UploadFile = File(...)):
 
         llm = OpenAI(temperature=0)
         chain = load_qa_chain(llm, chain_type="stuff")
-        response = chain.run(input_documents=docs, question="Summarize this in 5 sentences")
+        response = chain.run({"input_documents": docs, "question": "Summarize this in 5 sentences"})
 
-        return {"answer": str(response)}  # 🔁 unified key to fix frontend format issue
+        return {"summary": str(response)}
 
     except Exception as e:
+        logging.exception("Summarization failed")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/ask")
@@ -73,9 +77,10 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
 
         llm = OpenAI(temperature=0)
         chain = load_qa_chain(llm, chain_type="stuff")
-        response = chain.run(input_documents=relevant_docs, question=question)
+        response = chain.run({"input_documents": relevant_docs, "question": question})
 
         return {"answer": str(response)}
 
     except Exception as e:
+        logging.exception("Question answering failed")
         return JSONResponse(status_code=500, content={"error": str(e)})
