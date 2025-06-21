@@ -1,98 +1,148 @@
-import streamlit as st
-import requests
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+from langchain_community.document_loaders import PyMuPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain.chains.question_answering import load_qa_chain
+from langchain_community.chat_models import ChatOpenAI
+from langchain.chains.summarize import load_summarize_chain
+from langdetect import detect
+
+import tempfile
+import traceback
 import os
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
-access_code = os.getenv("ACCESS_CODE", "terasecret123")  # Set your code in .env
+# Load environment variables securely
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
-# Simple session-based access control
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-if not st.session_state.authenticated:
-    st.title("🔐 Access Required")
-    user_code = st.text_input("Enter Access Code", type="password")
-    if st.button("Submit"):
-        if user_code == access_code:
-            st.success("✅ Access granted")
-            st.session_state.authenticated = True
-            st.experimental_rerun()
-        else:
-            st.error("❌ Invalid access code")
-    st.stop()
-
-# ---- Main App Starts Here ----
-st.set_page_config(
-    page_title="AI Catalyst PDF Assistant",
-    page_icon="🧠",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+app = FastAPI(
+    title="AI Catalyst API",
+    description="🧠 Cognitive PDF Assistant using LangChain + OpenAI\n\n📍 TerasystemsAI - Philadelphia, PA, USA - Serving Globally\n🌐 www.terasystems.ai\n✉️ hello@terasystems.ai",
+    version="2.3.0 - Ultra Modern Adobe-Red Theme"
 )
 
-st.title("AI Catalyst PDF Assistant 🧠")
-st.subheader("Summarize or ask questions from your PDF using LangChain + OpenAI")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
-mode = st.radio("What do you want to do?", ["Summarize", "Ask a question"])
-
-# Advanced options
-model_name = st.selectbox("Select model:", ["gpt-3.5-turbo-16k", "gpt-4"])
-temperature = st.slider("Temperature (creativity):", 0.0, 1.0, 0.0, step=0.1)
-allow_non_english = st.checkbox("Allow non-English PDFs", value=False)
-
-col1, col2 = st.columns(2)
-with col1:
-    start_page = st.number_input("Start Page", min_value=1, value=1)
-with col2:
-    end_page = st.number_input("End Page", min_value=start_page, value=start_page + 4)
-
-question = ""
-if mode == "Ask a question":
-    question = st.text_input("Enter your question:", placeholder="e.g. What is the core mission of this document?")
-
-if uploaded_file and (mode == "Summarize" or (mode == "Ask a question" and question)):
-    with st.spinner("Processing..."):
-        progress = st.progress(0)
-        try:
-            endpoint = "/summarize" if mode == "Summarize" else "/ask"
-            files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
-            data = {
-                "model_name": model_name,
-                "temperature": temperature,
-                "allow_non_english": str(allow_non_english).lower(),
-                "start_page": int(start_page),
-                "end_page": int(end_page)
+@app.get("/", tags=["Health Check"])
+def read_root():
+    return JSONResponse(content={
+        "status": "✅ API is running",
+        "message": "Welcome to AI Catalyst - your ultra-modern PDF assistant!",
+        "branding": {
+            "logo_url": "/static/logo.png",
+            "background_color": "#FF0000",  # Adobe Red
+            "footer": {
+                "website": "https://ai-catalyst.io",
+                "contact_email": "hello@ai-catalyst.io",
+                "address": "TerasystemsAI, Philadelphia, PA, USA - Serving Globally"
             }
+        },
+        "animations": True
+    })
 
-            if mode == "Ask a question":
-                data["question"] = question
+def get_llm(model_name="gpt-3.5-turbo-16k", temperature=0):
+    return ChatOpenAI(model_name=model_name, temperature=temperature)
 
-            response = requests.post(f"{backend_url}{endpoint}", files=files, data=data)
-            response.raise_for_status()
-            result = response.json()
+@app.post("/summarize")
+async def summarize_pdf(
+    file: UploadFile = File(...),
+    model_name: str = Form("gpt-3.5-turbo-16k"),
+    temperature: float = Form(0.0),
+    allow_non_english: bool = Form(False),
+    start_page: int = Form(1),
+    end_page: int = Form(10000)
+):
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
 
-            answer = result.get("answer")
-            language = result.get("language", "unknown")
-            citations = result.get("citations", [])
+        loader = PyMuPDFLoader(tmp_path)
+        all_pages = loader.load()
+        pages = all_pages[start_page - 1:end_page]
 
-            if answer:
-                st.success(answer)
-                st.info(f"🌍 Detected Language: {language}")
-                if citations:
-                    st.caption(f"📚 Citations from: {', '.join(citations)}")
-            else:
-                st.error("Unexpected response format.")
+        sample_text = pages[0].page_content[:300] if pages else ""
+        lang = detect(sample_text) if sample_text else "unknown"
 
-        except requests.exceptions.HTTPError as http_err:
-            try:
-                error_msg = response.json().get("error", str(http_err))
-                st.error(f"Error: {error_msg}")
-            except:
-                st.error(f"HTTP error: {http_err}")
-        except Exception as e:
-            st.error(f"Error: {e}")
-        finally:
-            progress.progress(100)
+        if lang != "en" and not allow_non_english:
+            return JSONResponse(status_code=400, content={"error": f"Detected non-English text: {lang}"})
+
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        docs = splitter.split_documents(pages)
+
+        llm = get_llm(model_name=model_name, temperature=temperature)
+        chain = load_summarize_chain(llm, chain_type="map_reduce")
+        summary = chain.run(docs)
+
+        citations = [d.metadata.get("source", "page") for d in docs[:3]]
+
+        return {
+            "answer": summary,
+            "language": lang,
+            "citations": citations,
+            "theme": "adobe-red",
+            "footer": True
+        }
+
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/ask")
+async def ask_question(
+    file: UploadFile = File(...),
+    question: str = Form(...),
+    model_name: str = Form("gpt-3.5-turbo-16k"),
+    temperature: float = Form(0.0),
+    allow_non_english: bool = Form(False),
+    start_page: int = Form(1),
+    end_page: int = Form(10000)
+):
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+
+        loader = PyMuPDFLoader(tmp_path)
+        all_pages = loader.load()
+        pages = all_pages[start_page - 1:end_page]
+
+        sample_text = pages[0].page_content[:300] if pages else ""
+        lang = detect(sample_text) if sample_text else "unknown"
+
+        if lang != "en" and not allow_non_english:
+            return JSONResponse(status_code=400, content={"error": f"Detected non-English text: {lang}"})
+
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        docs = splitter.split_documents(pages)
+
+        embeddings = OpenAIEmbeddings()
+        vectorstore = FAISS.from_documents(docs, embeddings)
+        retriever = vectorstore.as_retriever()
+        relevant_docs = retriever.get_relevant_documents(question)
+
+        llm = get_llm(model_name=model_name, temperature=temperature)
+        chain = load_qa_chain(llm, chain_type="stuff")
+        answer = chain.run(input_documents=relevant_docs, question=question)
+
+        citations = [doc.metadata.get("source", "page") for doc in relevant_docs[:3]]
+
+        return {
+            "answer": answer,
+            "language": lang,
+            "citations": citations,
+            "theme": "adobe-red",
+            "footer": True
+        }
+
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
