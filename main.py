@@ -7,31 +7,34 @@ from dotenv import load_dotenv
 load_dotenv()
 backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
 access_code = os.getenv("ACCESS_CODE", "terasecret123")  # Set your code in .env
-# --- Access Control ---
-if "access_granted" not in st.session_state:
-    st.session_state.access_granted = False
 
-if not st.session_state.access_granted:
+# Simple session-based access control
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
     st.title("🔐 Access Required")
-    code_input = st.text_input("Enter your access code to continue", type="password")
-    if code_input == valid_access_code:
-        st.session_state.access_granted = True
-        st.success("Access granted! 🚀")
-        st.experimental_rerun()
-    elif code_input:
-        st.error("Invalid access code.")
+    user_code = st.text_input("Enter Access Code", type="password")
+    if st.button("Submit"):
+        if user_code == access_code:
+            st.success("✅ Access granted")
+            st.session_state.authenticated = True
+            st.experimental_rerun()
+        else:
+            st.error("❌ Invalid access code")
     st.stop()
 
-# --- Main App Starts Here ---
+# ---- Main App Starts Here ----
 st.set_page_config(
     page_title="AI Catalyst PDF Assistant",
     page_icon="🧠",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
+
 st.title("AI Catalyst PDF Assistant 🧠")
 st.subheader("Summarize or ask questions from your PDF using LangChain + OpenAI")
-st.subheader("bY Dr. Lebede Ngartera")
+
 uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 mode = st.radio("What do you want to do?", ["Summarize", "Ask a question"])
 
@@ -39,6 +42,7 @@ mode = st.radio("What do you want to do?", ["Summarize", "Ask a question"])
 model_name = st.selectbox("Select model:", ["gpt-3.5-turbo-16k", "gpt-4"])
 temperature = st.slider("Temperature (creativity):", 0.0, 1.0, 0.0, step=0.1)
 allow_non_english = st.checkbox("Allow non-English PDFs", value=False)
+
 col1, col2 = st.columns(2)
 with col1:
     start_page = st.number_input("Start Page", min_value=1, value=1)
@@ -76,7 +80,7 @@ if uploaded_file and (mode == "Summarize" or (mode == "Ask a question" and quest
 
             if answer:
                 st.success(answer)
-                st.info(f"Detected Language: {language}")
+                st.info(f"🌍 Detected Language: {language}")
                 if citations:
                     st.caption(f"📚 Citations from: {', '.join(citations)}")
             else:
